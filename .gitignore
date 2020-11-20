@@ -1,0 +1,5 @@
+*.out
+*exe
+*tds
+*bmp
+!image.bmp
