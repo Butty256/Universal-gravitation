@@ -12,6 +12,7 @@
 ********************************/
 
 #define DATANUM 16
+#define DT 1.0
 #define GC 6.674e-11
 
 /********************************
@@ -61,11 +62,8 @@ int g_onum;
 /* Quadric */
 GLUquadric *g_quad;
 
-/* 万有引力定数 */
-GLdouble g_gc = GC;
-
-/* 時間 */
-GLdouble g_dt = 50;
+/* 単位スケール */
+GLdouble g_s = 1, g_m = 1, g_kg = 1;
 
 /* カメラの視点e，注視点a，カメラの上方向u */
 GLdouble g_ex, g_ey, g_ez;
@@ -74,7 +72,7 @@ GLdouble g_ux = 0.0, g_uy = 0.0, g_uz = 1.0;
 
 /* 描画サイズ */
 GLdouble g_size = 10.0;
-GLdouble g_xscale = 1.0, g_yscale = 1.0, g_zscale = 1.0;
+GLdouble g_xscale = 10.0, g_yscale = 10.0, g_zscale = 10.0;
 
 /* マウスの角度 */
 int g_mx, g_my;
@@ -95,7 +93,7 @@ void display(void)
 	gluLookAt(
 		g_ex + (g_xscale * g_ax), g_ey + (g_yscale * g_ay), g_ez + (g_zscale * g_az),
 		g_xscale * g_ax, g_yscale * g_ay, g_zscale * g_az,
-		g_ux, g_uy, g_uz
+		g_ux, g_uy, (sin(g_mt) > 0) ? g_uz : -g_uz
 	);
 
 	for (i = 0; i < g_onum; i++)
@@ -162,13 +160,13 @@ static void timer(int dummy)
 {
 	int i, j;
 	GLdouble x, y, z, r;
-	glutTimerFunc(g_dt, timer, 0);
+	glutTimerFunc(DT, timer, 0);
 
 	for (i = 0; i < g_onum; i++)
 	{
-		g_obj[i].p[0] += g_obj[i].v[0] * 0.001;
-		g_obj[i].p[1] += g_obj[i].v[1] * 0.001;
-		g_obj[i].p[2] += g_obj[i].v[2] * 0.001;
+		g_obj[i].p[0] += g_obj[i].v[0] * DT / 1000 * g_s;
+		g_obj[i].p[1] += g_obj[i].v[1] * DT / 1000 * g_s;
+		g_obj[i].p[2] += g_obj[i].v[2] * DT / 1000 * g_s;
 	}
 
 	for (i = 0; i < g_onum; i++)
@@ -180,12 +178,10 @@ static void timer(int dummy)
 			y = g_obj[j].p[1] - g_obj[i].p[1];
 			z = g_obj[j].p[2] - g_obj[i].p[2];
 			r = sqrt(x * x + y * y + z * z);
-			if (0.5 * r >= g_obj[i].r + g_obj[j].r)
-			{
-				g_obj[i].v[0] += g_gc * g_obj[j].m / (r * r) * (x / r) * 0.001;
-				g_obj[i].v[1] += g_gc * g_obj[j].m / (r * r) * (y / r) * 0.001;
-				g_obj[i].v[2] += g_gc * g_obj[j].m / (r * r) * (z / r) * 0.001;
-			}
+			if (r == 0) continue;
+			g_obj[i].v[0] += GC * g_obj[j].m / (r * r) * (x / r) * DT / 1000 * g_kg / (g_m * g_m) * g_s / g_m;
+			g_obj[i].v[1] += GC * g_obj[j].m / (r * r) * (y / r) * DT / 1000 * g_kg / (g_m * g_m) * g_s / g_m;
+			g_obj[i].v[2] += GC * g_obj[j].m / (r * r) * (z / r) * DT / 1000 * g_kg / (g_m * g_m) * g_s / g_m;
 		}
 	}
 
@@ -198,7 +194,7 @@ void resize(int w, int h)
 	glViewport(0, 0, w, h);
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	glOrtho(-w / g_size, w / g_size, -h / g_size, h / g_size, -1024, 1024);
+	glOrtho(-w / g_size, w / g_size, -h / g_size, h / g_size, -32768, 32767);
 }
 
 /* キーボードコールバック関数 */
@@ -206,15 +202,8 @@ void keyin(unsigned char key, int x, int y)
 {
 	switch(key)
 	{
-		case 'x': g_xscale *= 1.2; glutPostRedisplay(); break;
-		case 'X': g_xscale /= 1.2; glutPostRedisplay(); break;
-		case 'y': g_yscale *= 1.2; glutPostRedisplay(); break;
-		case 'Y': g_yscale /= 1.2; glutPostRedisplay(); break;
-		case 'z': g_zscale *= 1.2; glutPostRedisplay(); break;
-		case 'Z': g_zscale /= 1.2; glutPostRedisplay(); break;
-		case 't': g_dt /= 1.2; glutPostRedisplay(); break;
-		case 'T': g_dt *= 1.2; glutPostRedisplay(); break;
-		case 'i': g_dt *= -1; glutPostRedisplay(); break;
+		case 't': g_s *= 2; glutPostRedisplay(); break;
+		case 'T': g_s /= 2; glutPostRedisplay(); break;
 		case 'u': g_size *= 1.05; resize(glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT)); glutPostRedisplay(); break;
 		case 'U': g_size /= 1.05; resize(glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT)); glutPostRedisplay(); break;
 		case 'S': saveImage(); break;
@@ -230,12 +219,7 @@ void motionActive(int x, int y)
 
 	dx = x - g_mx;
 	dy = y - g_my;
-
-	g_mp = g_mp_s - 0.001 * dx;
-	g_mt = g_mt_s - 0.001 * dy;
-
-	if (g_mt < 0) g_mt += M_PI, g_mp += M_PI;
-	else if (g_mt > M_PI) g_mt -= M_PI, g_mp -= M_PI;
+	if (sin(g_mt_s) < 0) dx *= -1;
 
 	g_ex = sin(g_mt) * cos(g_mp);
 	g_ey = sin(g_mt) * sin(g_mp);
@@ -300,26 +284,34 @@ void init(void)
 /* メイン関数 */
 int main(int argc, char **argv)
 {
+	FILE *fp;
 	GLfloat r, g, b;
 	char buf[64];
 
-	fprintf(stdout, "m px py pz vx vy vz r R G B\nend command: 0\n");
+	if ((fp = fopen("test.csv", "rt")) == NULL) return 1;
 
-	for (g_onum = 0; g_onum < DATANUM; g_onum++)
+	while (fgets(buf, sizeof(buf), fp) != NULL)
 	{
-		fgets(buf, sizeof(buf), stdin);
-		g_obj[g_onum].m = atof(strtok(buf, " \0"));
-		if (g_obj[g_onum].m == 0) break;
-		g_obj[g_onum].p[0] = atof(strtok(NULL, " \0"));
-		g_obj[g_onum].p[1] = atof(strtok(NULL, " \0"));
-		g_obj[g_onum].p[2] = atof(strtok(NULL, " \0"));
-		g_obj[g_onum].v[0] = atof(strtok(NULL, " \0"));
-		g_obj[g_onum].v[1] = atof(strtok(NULL, " \0"));
-		g_obj[g_onum].v[2] = atof(strtok(NULL, " \0"));
-		g_obj[g_onum].r = atof(strtok(NULL, " \0"));
-		r = atof(strtok(NULL, " \0"));
-		g = atof(strtok(NULL, " \0"));
-		b = atof(strtok(NULL, " \0"));
+		if (buf[0] == '#') continue;
+		if (buf[0] == 's' ||buf[0] == 'S')
+		{
+			strtok(buf, ",\0");
+			g_s = atof(strtok(NULL, ",\0"));
+			g_m = atof(strtok(NULL, ",\0"));
+			g_kg = atof(strtok(NULL, "\0"));
+			continue;
+		}
+		g_obj[g_onum].m = atof(strtok(buf, ",\0"));
+		g_obj[g_onum].p[0] = atof(strtok(NULL, ",\0"));
+		g_obj[g_onum].p[1] = atof(strtok(NULL, ",\0"));
+		g_obj[g_onum].p[2] = atof(strtok(NULL, ",\0"));
+		g_obj[g_onum].v[0] = atof(strtok(NULL, ",\0"));
+		g_obj[g_onum].v[1] = atof(strtok(NULL, ",\0"));
+		g_obj[g_onum].v[2] = atof(strtok(NULL, ",\0"));
+		g_obj[g_onum].r = atof(strtok(NULL, ",\0"));
+		r = atof(strtok(NULL, ",\0"));
+		g = atof(strtok(NULL, ",\0"));
+		b = atof(strtok(NULL, "\0"));
 		g_obj[g_onum].c.ambient[0] = 0.3 * r;
 		g_obj[g_onum].c.ambient[1] = 0.3 * g;
 		g_obj[g_onum].c.ambient[2] = 0.3 * b;
@@ -333,7 +325,11 @@ int main(int argc, char **argv)
 		g_obj[g_onum].c.specular[2] = 0.2 * b + 0.6;
 		g_obj[g_onum].c.specular[3] = 1;
 		g_obj[g_onum].c.shininess = 32;
+		g_onum++;
+		if (g_onum >= DATANUM) break;
 	}
+
+	fclose(fp);
 
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
@@ -341,7 +337,7 @@ int main(int argc, char **argv)
 	glutCreateWindow(argv[0]);
 	glutDisplayFunc(display);
 	glutReshapeFunc(resize);
-	glutTimerFunc(g_dt, timer, 0);
+	glutTimerFunc(DT, timer, 0);
 	glutKeyboardFunc(keyin);
 	glutMotionFunc(motionActive);
 	glutPassiveMotionFunc(motionPassive);
