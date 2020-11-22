@@ -260,7 +260,7 @@ void readcsv(FILE *fp)
 	while (fgets(buf, sizeof(buf), fp) != NULL)
 	{
 		if (buf[0] == '#') continue;
-		if (buf[0] == 's' ||buf[0] == 'S')
+		if (buf[0] == 's' || buf[0] == 'S')
 		{
 			strtok(buf, ",\0");
 			g_s = atof(strtok(NULL, ",\0"));
