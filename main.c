@@ -49,6 +49,7 @@ void keyin(unsigned char key, int x, int y);
 void motionActive(int x, int y);
 void motionPassive(int x, int y);
 void mouse(int button, int state, int x, int y);
+void readcsv(FILE *fp);
 void init(void);
 
 /********************************
@@ -65,14 +66,12 @@ GLUquadric *g_quad;
 /* 単位スケール */
 GLdouble g_s = 1, g_m = 1, g_kg = 1;
 
-/* カメラの視点e，注視点a，カメラの上方向u */
+/* カメラの視点e，カメラの上方向u */
 GLdouble g_ex, g_ey, g_ez;
-GLdouble g_ax = 0.0, g_ay = 0.0, g_az = 0.0;
 GLdouble g_ux = 0.0, g_uy = 0.0, g_uz = 1.0;
 
 /* 描画サイズ */
 GLdouble g_size = 10.0;
-GLdouble g_xscale = 10.0, g_yscale = 10.0, g_zscale = 10.0;
 
 /* マウスの角度 */
 int g_mx, g_my;
@@ -90,11 +89,7 @@ void display(void)
 
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
-	gluLookAt(
-		g_ex + (g_xscale * g_ax), g_ey + (g_yscale * g_ay), g_ez + (g_zscale * g_az),
-		g_xscale * g_ax, g_yscale * g_ay, g_zscale * g_az,
-		g_ux, g_uy, (sin(g_mt) > 0) ? g_uz : -g_uz
-	);
+	gluLookAt(g_ex, g_ey, g_ez, 0, 0, 0, g_ux, g_uy, (sin(g_mt) > 0) ? g_uz : -g_uz);
 
 	for (i = 0; i < g_onum; i++)
 	{
@@ -178,7 +173,7 @@ static void timer(int dummy)
 			y = g_obj[j].p[1] - g_obj[i].p[1];
 			z = g_obj[j].p[2] - g_obj[i].p[2];
 			r = sqrt(x * x + y * y + z * z);
-			if (r == 0) continue;
+			if (r <= g_obj[i].r + g_obj[j].r) continue;
 			g_obj[i].v[0] += GC * g_obj[j].m / (r * r) * (x / r) * DT / 1000 * g_kg / (g_m * g_m) * g_s / g_m;
 			g_obj[i].v[1] += GC * g_obj[j].m / (r * r) * (y / r) * DT / 1000 * g_kg / (g_m * g_m) * g_s / g_m;
 			g_obj[i].v[2] += GC * g_obj[j].m / (r * r) * (z / r) * DT / 1000 * g_kg / (g_m * g_m) * g_s / g_m;
@@ -221,6 +216,9 @@ void motionActive(int x, int y)
 	dy = y - g_my;
 	if (sin(g_mt_s) < 0) dx *= -1;
 
+	g_mp = g_mp_s - 0.001 * dx;
+	g_mt = g_mt_s - 0.001 * dy;
+
 	g_ex = sin(g_mt) * cos(g_mp);
 	g_ey = sin(g_mt) * sin(g_mp);
 	g_ez = cos(g_mt);
@@ -254,42 +252,11 @@ void mouse(int button, int state, int x, int y)
 	}
 }
 
-/* 初期化する関数 */
-void init(void)
+/* csv読み込み関数 */
+void readcsv(FILE *fp)
 {
-	int i;
-
-	g_ex = sin(g_mt) * cos(g_mp);
-	g_ey = sin(g_mt) * sin(g_mp);
-	g_ez = cos(g_mt);
-
-	glClearColor(0.0, 0.0, 0.0, 1.0);
-	g_quad = gluNewQuadric();
-	gluQuadricDrawStyle(g_quad, GLU_FILL);
-	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_LIGHTING);
-	glEnable(GL_LIGHT0);
-
-	for (i = 0; i < g_onum; i++)
-	{
-		glNewList(i + 1, GL_COMPILE);
-		glPushMatrix();
-		materials(g_obj[i].c);
-		gluSphere(g_quad, g_obj[i].r, 16, 16);
-		glPopMatrix();
-		glEndList();
-	}
-}
-
-/* メイン関数 */
-int main(int argc, char **argv)
-{
-	FILE *fp;
 	GLfloat r, g, b;
-	char buf[64];
-
-	if ((fp = fopen("test.csv", "rt")) == NULL) return 1;
-
+	char buf[128];
 	while (fgets(buf, sizeof(buf), fp) != NULL)
 	{
 		if (buf[0] == '#') continue;
@@ -328,7 +295,48 @@ int main(int argc, char **argv)
 		g_onum++;
 		if (g_onum >= DATANUM) break;
 	}
+}
 
+/* 初期化する関数 */
+void init(void)
+{
+	int i;
+
+	g_ex = sin(g_mt) * cos(g_mp);
+	g_ey = sin(g_mt) * sin(g_mp);
+	g_ez = cos(g_mt);
+
+	glClearColor(0.0, 0.0, 0.0, 1.0);
+	g_quad = gluNewQuadric();
+	gluQuadricDrawStyle(g_quad, GLU_FILL);
+	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_LIGHTING);
+	glEnable(GL_LIGHT0);
+
+	for (i = 0; i < g_onum; i++)
+	{
+		glNewList(i + 1, GL_COMPILE);
+		glPushMatrix();
+		materials(g_obj[i].c);
+		gluSphere(g_quad, g_obj[i].r, 16, 16);
+		glPopMatrix();
+		glEndList();
+	}
+}
+
+/* メイン関数 */
+int main(int argc, char **argv)
+{
+	FILE *fp;
+	char filename[16] = "default.csv";
+
+	if (argc == 2) strcpy(filename, argv[1]);
+	if ((fp = fopen(filename, "rt")) == NULL)
+	{
+		fprintf(stderr, "%s is not found.\n", filename);
+		return 1;
+	}
+	readcsv(fp);
 	fclose(fp);
 
 	glutInit(&argc, argv);
@@ -342,7 +350,6 @@ int main(int argc, char **argv)
 	glutMotionFunc(motionActive);
 	glutPassiveMotionFunc(motionPassive);
 	glutMouseFunc(mouse);
-
 	init();
 	glutMainLoop();
 
